@@ -1,1 +1,0 @@
-node slave1.js & node slave2.js & node slave3.js

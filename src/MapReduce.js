@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
+const safeEval = require('safe-eval');
 
 class MapReduceSlave {
   constructor({port, name}) {
@@ -11,7 +12,7 @@ class MapReduceSlave {
       const func = req.body && req.body.func;
       if (func && this.callback) {
         try {
-          const executeFunction = eval(func);
+          const executeFunction = safeEval(func);
           const result = this.callback(executeFunction);
           res.send({ success: true, result });
         } catch (error) {
@@ -51,7 +52,7 @@ class MapReduceMaster {
         }
       }))
       const grouped = this.groupByKey(mapResults);
-      const reducerFunction = eval(reducer.func);
+      const reducerFunction = safeEval(reducer.func);
       try {
         for (const key in grouped) {
           grouped[key] = grouped[key].reduce(reducerFunction,reducer.start);
@@ -82,7 +83,33 @@ class MapReduceMaster {
   }
 }
 
+class MapReduceClient {
+  constructor({ masterPort }) {
+    this.masterPort = masterPort;
+  }
+
+  map(fn) {
+    this.mapper = fn;
+    return this;
+  }
+
+  async reduce(fn, start) {
+    if (!this.mapper) {
+      throw new Error('Cannot reduce without map function!');
+    }
+    const response = await axios.post(`http://127.0.0.1:${this.masterPort}/map-reduce`, {
+      mapper: this.mapper.toString(),
+      reducer: {
+        start,
+        func: fn.toString(),
+      }
+    });
+    return response.data;
+  }
+}
+
 module.exports = {
   MapReduceSlave,
   MapReduceMaster,
+  MapReduceClient,
 }
